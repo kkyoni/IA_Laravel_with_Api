@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\User;
 
 use App\Http\Controllers\Controller;
+use App\Models\Card;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Models\User;
@@ -12,6 +13,7 @@ use Tymon\JWTAuth\Exceptions\JWTException;
 use Tymon\JWTAuth\Exceptions\TokenExpiredException;
 use Tymon\JWTAuth\Exceptions\TokenInvalidException;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
@@ -79,19 +81,19 @@ class UserController extends Controller
             'email.required'     => 'Email is Required',
             'password.required'  => 'Password is Required',
             'password.min'       => 'Password must be at least :min characters',
-            'user_type.required' => 'User Type is Required',
+            // 'user_type.required' => 'User Type is Required',
         ];
         $validatedData = Validator::make($request->all(), [
             'email'     => 'required',
             'password'  => 'required|min:6',
-            'user_type' => 'required',
+            // 'user_type' => 'required',
         ], $customMessages);
         if ($validatedData->fails()) {
             return response()->json(['status' => 'validtion', 'errors' => $validatedData->errors()], 200);
         }
 
         try {
-            $credentials = $request->only('email', 'password', 'user_type');
+            $credentials = $request->only('email', 'password');
             $data = [];
             try {
                 if (!$token = JWTAuth::attempt($credentials)) {
@@ -134,7 +136,13 @@ class UserController extends Controller
                 return response()->json(['status' => 'error', 'message' => 'You are not able login from this application...'], 200);
             }
             $user_data = User::where(['id' => $user->id])->first();
-            $data['user']  = $user_data;
+            $avatar_url = null;
+            if ($user_data->avatar) {
+                $avatar_url = Storage::url('user/' . $user_data->avatar);
+            }
+
+            $data['user'] = $user_data;
+            $data['user']['avatar'] = $avatar_url;
             return response()->json(['status' => 'success', 'message' => 'User Profile Successfull', 'data' => $data]);
         } catch (Exception $e) {
             return response()->json(['status' => 'error', 'message' => "Something went Wrong..."], 200);
@@ -227,6 +235,67 @@ class UserController extends Controller
             $user = User::find($user->id);
             JWTAuth::invalidate($request->token);
             return response()->json(['status'  => 'success', 'message' => 'User logged out Successfull..!']);
+        } catch (Exception $e) {
+            return response()->json(['status'  => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    /* -----------------------------------------------------------------------------------------
+    @Description: Function for Logout
+    -------------------------------------------------------------------------------------------- */
+    public function addCard(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json(['status' => 'error', 'message' => "Invalid Token..."], 200);
+            }
+            // dd($request->all());
+            $card = Card::create([
+                'card_holder_name'   => $request->card_holder_name,
+                'card_number'     => $request->card_number,
+                'card_type'    => $request->card_type,
+                'expiry_date' => $request->expiry_date,
+                'user_id' => $user->id
+            ]);
+            $carddateils = Card::find($card->id);
+            return response()->json(['status'  => 'success', 'message' => 'User logged out Successfull..!', 'data' => $carddateils]);
+        } catch (Exception $e) {
+            return response()->json(['status'  => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    /* -----------------------------------------------------------------------------------------
+    @Description: Function for Logout
+    -------------------------------------------------------------------------------------------- */
+    public function getCard(Request $request)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json(['status' => 'error', 'message' => "Invalid Token..."], 200);
+            }
+
+            $carddateils = Card::where('user_id', $user->id)->get();
+            return response()->json(['status'  => 'success', 'message' => 'User logged out Successfull..!', 'data' => $carddateils]);
+        } catch (Exception $e) {
+            return response()->json(['status'  => 'error', 'message' => $e->getMessage()]);
+        }
+    }
+
+    /* -----------------------------------------------------------------------------------------
+    @Description: Function for User Card Delete
+    -------------------------------------------------------------------------------------------- */
+    public function getCardDelete(Request $request, $cardId)
+    {
+        try {
+            $user = JWTAuth::parseToken()->authenticate();
+            if (!$user) {
+                return response()->json(['status' => 'error', 'message' => "Invalid Token..."], 200);
+            }
+            $cardDelete = Card::where('id', $cardId)->first();
+            $cardDelete->delete();
+            return response()->json(['status'  => 'success', 'message' => 'User Card Delete Successfull..!']);
         } catch (Exception $e) {
             return response()->json(['status'  => 'error', 'message' => $e->getMessage()]);
         }
